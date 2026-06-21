@@ -1,5 +1,9 @@
 # Backtesting Results V2
 
+> **Disclaimer:** Illustrative placeholder figures, not verified results. Run
+> your own backtests (see [BACKTESTING_GUIDE.md](BACKTESTING_GUIDE.md)) before
+> relying on them.
+
 ## PropFirm SuperEA v2.0 Comprehensive Backtesting Report
 
 ### Date: 2026-03-31

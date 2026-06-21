@@ -1,5 +1,10 @@
 # Backtesting Results for PropFirm_SuperEA
 
+> **Disclaimer:** The figures below are illustrative placeholders, not verified
+> results. Run your own backtests in the MT5 Strategy Tester (see
+> [BACKTESTING_GUIDE.md](BACKTESTING_GUIDE.md)) and replace these numbers before
+> relying on them.
+
 ## Overview
 This document provides a comprehensive summary of the backtesting results for Version 1 and Version 2 of the PropFirm_SuperEA on three currency pairs: XAUUSD, EURUSD, and GBPUSD.
 
