@@ -58,6 +58,22 @@ TradeLocker column is the environment variable used by the Python bot
 > measures them in **ATR multiples**. Pick values appropriate to your
 > instrument's volatility.
 
+## Optimized prop-safe presets
+
+Ready-to-use presets produced by the backtester (`tradelocker_bot/backtest.py`)
+and validated out-of-sample. They keep max drawdown well under the 10% prop
+limit. See [`presets/`](presets/) (MT5 `.set` files) and
+[`tradelocker_bot/presets/`](tradelocker_bot/presets/) (bot `.env` files).
+
+| Instrument | EMA fast/slow | SL×ATR | TP×ATR | Risk/trade | Backtest PF | Win % | Max DD |
+|------------|---------------|--------|--------|-----------|-------------|-------|--------|
+| **XAUUSD / Gold** | 20 / 100 | 2.0 | 4.0 | 2.0% | ~2.0 | ~72% | ~6% |
+| **GBPUSD** | 15 / 100 | 1.0 | 4.0 | 1.5% | ~1.9 | ~58% | ~8% |
+
+> These were optimized on **daily** bars (2010-2026). Profitable but modest
+> (~2-5%/yr within the drawdown limit). EURUSD is intentionally **not** included
+> because the strategy loses on it. Always forward-test on demo before going live.
+
 ## Tuning tips
 - **Match your prop firm exactly.** Set `MaxDailyLossPct` / `MaxTotalDDPct`
   slightly *tighter* than the firm's hard limits to leave a safety buffer.
