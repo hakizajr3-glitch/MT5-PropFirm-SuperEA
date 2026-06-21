@@ -8,5 +8,7 @@ venv/
 
 # Bot runtime / secrets
 .env
+*.env
+*.log
 *.tl_bot_state.json
 .tl_bot_state.json
