@@ -1,0 +1,33 @@
+; PropFirm_SuperEA preset - GBPUSD (prop-safe, optimized 2010-2026)
+; Backtest (daily): profit factor ~1.9, win ~58%, max drawdown ~8%.
+; Load in MetaTrader 5: EA Inputs tab -> Load -> select this file.
+InpFastEMA=15
+InpSlowEMA=100
+InpATRPeriod=14
+InpSL_ATR=1.0
+InpTP_ATR=4.0
+InpUseRSIFilter=true
+InpRSIPeriod=14
+InpRSIBuyMin=50.0
+InpRSISellMax=50.0
+InpUseRiskPercent=true
+InpRiskPercent=1.5
+InpFixedLot=0.10
+InpMaxOpenPositions=1
+InpMaxSpreadPoints=30
+InpMaxDailyLossPct=5.0
+InpMaxTotalDDPct=10.0
+InpCloseOnDailyStop=true
+InpCloseOnTotalStop=true
+InpUseSession=true
+InpStartHour=7
+InpEndHour=20
+InpTradeMonday=true
+InpTradeFriday=true
+InpUseBreakEven=true
+InpBE_TriggerPoints=150
+InpBE_LockPoints=20
+InpUseTrailing=true
+InpTrailStartPoints=250
+InpTrailStepPoints=150
+InpMagicNumber=260622

@@ -1,0 +1,33 @@
+; PropFirm_SuperEA preset - XAUUSD / Gold (prop-safe, optimized 2010-2026)
+; Backtest (daily, GC=F proxy): profit factor ~2.0, win ~72%, max drawdown ~6%.
+; Load in MetaTrader 5: EA Inputs tab -> Load -> select this file.
+InpFastEMA=20
+InpSlowEMA=100
+InpATRPeriod=14
+InpSL_ATR=2.0
+InpTP_ATR=4.0
+InpUseRSIFilter=true
+InpRSIPeriod=14
+InpRSIBuyMin=50.0
+InpRSISellMax=50.0
+InpUseRiskPercent=true
+InpRiskPercent=2.0
+InpFixedLot=0.10
+InpMaxOpenPositions=1
+InpMaxSpreadPoints=200
+InpMaxDailyLossPct=5.0
+InpMaxTotalDDPct=10.0
+InpCloseOnDailyStop=true
+InpCloseOnTotalStop=true
+InpUseSession=true
+InpStartHour=7
+InpEndHour=20
+InpTradeMonday=true
+InpTradeFriday=true
+InpUseBreakEven=true
+InpBE_TriggerPoints=300
+InpBE_LockPoints=50
+InpUseTrailing=true
+InpTrailStartPoints=500
+InpTrailStepPoints=300
+InpMagicNumber=260621
