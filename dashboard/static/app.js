@@ -160,6 +160,37 @@ function renderAgents(rows) {
   </div>`).join("");
 }
 
+function renderEngine(e) {
+  e = e || {};
+  const st = document.getElementById("engine-status");
+  const running = !!e.running;
+  st.textContent = running ? "RUNNING" : "STOPPED";
+  st.className = "pill " + (running ? "running" : "halted");
+  const startBtn = document.getElementById("btn-start");
+  const stopBtn = document.getElementById("btn-stop");
+  startBtn.disabled = running;
+  stopBtn.disabled = !running;
+  let detail = `${e.mode || "DEMO"} · ${e.cycles || 0} cycles`;
+  if (e.last_action) detail += ` · ${e.last_action}`;
+  if (e.last_error) detail += ` · ⚠ ${e.last_error}`;
+  document.getElementById("engine-detail").textContent = detail;
+}
+
+async function setEngine(action) {
+  const startBtn = document.getElementById("btn-start");
+  const stopBtn = document.getElementById("btn-stop");
+  startBtn.disabled = true; stopBtn.disabled = true;
+  try {
+    const res = await fetch("/api/" + action, { method: "POST", cache: "no-store" });
+    const j = await res.json();
+    renderEngine(j.engine);
+  } catch (err) {
+    console.error("engine " + action + " failed", err);
+  } finally {
+    tick();
+  }
+}
+
 async function tick() {
   try {
     const res = await fetch("/api/state", { cache: "no-store" });
@@ -171,6 +202,7 @@ async function tick() {
     document.getElementById("updated").textContent = (s.generated_at || "").replace("T", " ").replace("+00:00", " UTC");
     const src = s.source || {};
     document.getElementById("source").textContent = `${src.mode || ""} (${src.name || ""})`;
+    renderEngine(s.engine || {});
     renderAccount(s.account || {});
     renderPerf(s.performance || {});
     renderRisk(s.risk || {});
@@ -181,6 +213,9 @@ async function tick() {
     console.error("state fetch failed", e);
   }
 }
+
+document.getElementById("btn-start").addEventListener("click", () => setEngine("start"));
+document.getElementById("btn-stop").addEventListener("click", () => setEngine("stop"));
 
 tick();
 setInterval(tick, REFRESH_MS);

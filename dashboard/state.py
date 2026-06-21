@@ -56,7 +56,8 @@ def _clean(obj):
     return _safe(obj)
 
 
-def build_state(provider: BaseProvider, cfg: DashboardConfig) -> dict:
+def build_state(provider: BaseProvider, cfg: DashboardConfig,
+                engine: dict | None = None) -> dict:
     account = provider.get_account()
     positions = provider.get_positions()
     closed = provider.get_closed_trades()
@@ -109,10 +110,12 @@ def build_state(provider: BaseProvider, cfg: DashboardConfig) -> dict:
             return "RUNNING"
         return "RUNNING" if running else "WAITING"
 
-    execution_status = "WAITING"
-    if mode == "LIVE":
+    engine_running = bool(engine and engine.get("running"))
+    if mode in ("SAFE MODE", "HALTED"):
+        execution_status = "WAITING"
+    elif engine_running:
         execution_status = "RUNNING"
-    elif mode in ("SAFE MODE", "HALTED"):
+    else:
         execution_status = "WAITING"
 
     agents = [
@@ -135,7 +138,8 @@ def build_state(provider: BaseProvider, cfg: DashboardConfig) -> dict:
                    else f"daily {daily_used:.2f}/{cfg.daily_loss_limit_pct}%, "
                         f"DD {dd_used:.2f}/{cfg.max_drawdown_pct}%"},
         {"name": "Execution Agent", "status": execution_status,
-         "detail": f"mode={mode}; only executes approved plans"},
+         "detail": (f"engine {'RUNNING' if engine_running else 'STOPPED'}; "
+                    f"mode={mode}; only executes approved plans")},
         {"name": "Journal Agent", "status": st(len(closed) > 0),
          "detail": f"{len(closed)} closed trades recorded"},
         {"name": "Reflection Agent",
@@ -153,6 +157,8 @@ def build_state(provider: BaseProvider, cfg: DashboardConfig) -> dict:
         "source": {"mode": provider.mode, "name": provider.name,
                    "errors": provider.errors},
         "system_status": mode,
+        "engine": engine or {"running": False, "mode": "DEMO",
+                             "cycles": 0, "last_action": "idle"},
         "decision": "TRADES PENDING" if any_buy_sell else "WAIT — no confirmed setup",
         "account": account,
         "performance": perf.as_dict(),

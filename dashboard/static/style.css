@@ -48,6 +48,20 @@ h1, h2, h3 { margin: 0; font-weight: 650; }
 .pill.offline { background: #1c2532; color: var(--muted); }
 .pill.error { background: #3d1118; color: var(--red); border-color: #6e1d2a; }
 
+.engine-cluster { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; margin-left: 20px; }
+.engine-state { display: flex; gap: 8px; align-items: center; }
+.engine-detail { color: var(--muted); font-size: 11px; max-width: 280px; text-align: right; }
+.engine-controls { display: flex; gap: 8px; }
+.btn {
+  cursor: pointer; border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 14px; font-size: 13px; font-weight: 700; letter-spacing: .4px;
+  color: var(--text); background: #1c2532; transition: filter .15s, opacity .15s;
+}
+.btn:hover:not(:disabled) { filter: brightness(1.2); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-start { background: #10381f; color: var(--green); border-color: #1d5a35; }
+.btn-stop { background: #3d1118; color: var(--red); border-color: #6e1d2a; }
+
 main { padding: 20px 24px 40px; max-width: 1500px; margin: 0 auto; }
 .panel {
   background: var(--panel); border: 1px solid var(--line); border-radius: 14px;

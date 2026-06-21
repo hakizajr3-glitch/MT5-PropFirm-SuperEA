@@ -1,9 +1,10 @@
 # SHROUDAGE Dashboard
 
-A read-only web control panel for this repo's TradeLocker bot. It reuses the
+A web control panel for this repo's TradeLocker bot. It reuses the
 bot's **real** strategy and risk code (`tradelocker_bot/`) so what you see on the
 dashboard matches what the bot actually trades — no separate, drifting copy of
-the logic.
+the logic. **Start** / **Stop** buttons in the header drive the autonomous
+trading engine directly from the browser.
 
 ## What it shows
 
@@ -18,6 +19,24 @@ the logic.
   **Trend Agent** and **Range Agent** decisions, computed from real price data
   with EMA20/50, RSI14, ADX14, ATR14 and Bollinger Bands.
 - **Agent network** — RUNNING / WAITING / OFFLINE / ERROR for every agent.
+
+## Start / Stop trading
+
+The header has two buttons:
+
+- **▶ Start Trading** — launches the autonomous trading engine in a background
+  thread (`POST /api/start`). In **LIVE** mode (`SHROUD_LIVE=true` with valid
+  `TL_*` credentials) it runs the real `tradelocker_bot` loop and places real
+  orders on the connected account: connect → scan → signal → open / manage /
+  close. Without live credentials it runs a **DEMO** loop on the same cadence
+  that scans but never sends orders, so the control flow is fully exercisable.
+- **■ Stop** — halts the engine (`POST /api/stop`); the background loop exits and
+  no further trades are placed.
+
+The header shows the engine state (`RUNNING` / `STOPPED`), its mode, the cycle
+count and the last action / error. Risk **SAFE MODE** still overrides everything:
+if a daily-loss or drawdown limit is breached the engine refuses entries (and
+closes out) even while "started".
 
 ## Run
 

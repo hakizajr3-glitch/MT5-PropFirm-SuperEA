@@ -21,6 +21,7 @@ import time
 
 from flask import Flask, jsonify, render_template
 
+from .engine import ENGINE
 from .providers import DEFAULT_SYMBOLS, DemoProvider, LiveProvider
 from .state import DashboardConfig, build_state
 
@@ -64,6 +65,11 @@ def get_provider():
     return _provider
 
 
+def _invalidate_cache() -> None:
+    with _lock:
+        _cache.update(ts=0.0, state=None)
+
+
 def get_state() -> dict:
     ttl = float(os.getenv("SHROUD_REFRESH_SECS", "5"))
     now = time.time()
@@ -73,7 +79,7 @@ def get_state() -> dict:
         cfg = DashboardConfig.from_env()
         if get_provider().mode == "LIVE" and cfg.mode == "DRY RUN":
             cfg.mode = "LIVE"
-        state = build_state(get_provider(), cfg)
+        state = build_state(get_provider(), cfg, engine=ENGINE.status())
         _cache.update(ts=now, state=state)
         return state
 
@@ -86,6 +92,22 @@ def index():
 @app.route("/api/state")
 def api_state():
     return jsonify(get_state())
+
+
+@app.route("/api/start", methods=["POST"])
+def api_start():
+    status = ENGINE.start()
+    _invalidate_cache()
+    logger.info("Engine start requested via dashboard")
+    return jsonify({"ok": True, "engine": status})
+
+
+@app.route("/api/stop", methods=["POST"])
+def api_stop():
+    status = ENGINE.stop()
+    _invalidate_cache()
+    logger.info("Engine stop requested via dashboard")
+    return jsonify({"ok": True, "engine": status})
 
 
 @app.route("/healthz")
