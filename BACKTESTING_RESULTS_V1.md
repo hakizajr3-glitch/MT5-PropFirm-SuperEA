@@ -1,5 +1,9 @@
 # BACKTESTING RESULTS - Version 1.0
 
+> **Disclaimer:** Illustrative placeholder figures, not verified results. Run
+> your own backtests (see [BACKTESTING_GUIDE.md](BACKTESTING_GUIDE.md)) before
+> relying on them.
+
 ## Overview
 This document provides a comprehensive backtesting report for Version 1.0 of the MT5 Prop Firm Super EA.
 

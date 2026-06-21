@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Bot runtime / secrets
+.env
+*.tl_bot_state.json
+.tl_bot_state.json

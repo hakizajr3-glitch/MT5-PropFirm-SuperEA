@@ -1,40 +1,65 @@
-# PropFirm_SuperEA Trading Bot Documentation
+# PropFirm SuperEA
 
-## Overview  
-The PropFirm_SuperEA is an automated trading bot designed specifically for trading in prop firm environments. It utilizes advanced algorithms to analyze market data and make trading decisions in real-time.
+A trend-following trading strategy with **prop-firm risk controls**, available
+for **two platforms**:
 
-## Features  
-- **Automated Trading:** Executes trades based on predefined criteria without manual intervention.
-- **Market Analysis:** Uses technical indicators and price action analysis to identify trading opportunities.
-- **Risk Management:** Includes features such as stop-loss and take-profit to manage risk effectively.
-- **Customizable Settings:** Users can adjust settings to suit their trading style and risk preferences.
+| Platform | What it is | Where it lives |
+|----------|------------|----------------|
+| **MetaTrader 5** | An Expert Advisor (`.mq5`) you compile and attach to a chart | [`PropFirm_SuperEA.mq5`](PropFirm_SuperEA.mq5) |
+| **TradeLocker** | A Python bot that trades via TradeLocker's REST API | [`tradelocker_bot/`](tradelocker_bot/) |
 
-## Installation  
-1. Download the PropFirm_SuperEA files from the repository.  
-2. Copy the files to your MetaTrader 5 (MT5) installation folder under `MQL5\Experts\`.  
-3. Restart your MT5 platform.  
-4. Find the PropFirm_SuperEA in the Navigator panel, and attach it to a chart.
+Both implementations share the **same strategy and the same prop-firm
+guardrails**, so you can run whichever platform your broker / prop firm uses.
 
-## Configuration  
-To configure the bot:
-- Open the properties menu by right-clicking on the bot in the Navigator.
-- Adjust the input parameters to match your trading strategy and risk appetite.
+> **Why two codebases?** TradeLocker does **not** run MetaTrader Expert
+> Advisors. MQL5 (`.mq5`) only runs inside MetaTrader 5. To trade on
+> TradeLocker the strategy has to talk to TradeLocker's own API, which is what
+> the Python bot does.
 
-### Input Parameters  
-- **LotSize:** Defines the lot size for each trade.  
-- **StopLoss:** Sets the stop loss level in pips.  
-- **TakeProfit:** Sets the take profit level in pips.  
-- **MovingAveragePeriod:** The period for the moving average indicator used in decision-making.
+## The strategy
 
-## Usage  
-Once configured, the PropFirm_SuperEA will start analyzing the market and executing trades automatically. It is important to monitor the performance periodically and adjust settings as necessary.
+- **Trend entries:** EMA(20) crosses EMA(50) — buy on an up-cross, sell on a
+  down-cross (evaluated on closed bars only, so no repainting).
+- **Trend filter:** optional RSI(14) filter — only buy when RSI ≥ 50, only sell
+  when RSI ≤ 50.
+- **Volatility-based stops:** stop loss and take profit are placed at multiples
+  of ATR(14) (default SL = 1.5×ATR, TP = 2.5×ATR).
+- **Exit management:** automatic break-even and trailing stop.
 
-## Support  
-For support, please refer to the Issues section in the GitHub repository or contact the developers directly through their support channels.
+See [STRATEGY_SPECS.md](STRATEGY_SPECS.md) for the full rules.
 
-## License  
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Prop-firm guardrails
 
-## Acknowledgments  
-- Thanks to the contributors of the project for their input and development efforts.  
-- Special thanks to the MT5 community for their continuous support and resources.
+These are the rules that keep you inside a funded/challenge account's limits.
+They are enforced **automatically** on both platforms:
+
+- **Risk-% position sizing** — each trade risks a fixed % of balance (default 1%).
+- **Daily loss limit** — stop trading (and optionally flatten) once the day's
+  loss reaches a % of the day-start equity (default 5%).
+- **Max total drawdown** — stop trading once equity falls a % from its peak
+  (default 10%).
+- **Max open positions**, **spread filter**, and a **session/time-of-day filter**.
+
+Defaults match a common "5% daily / 10% total" prop-firm profile. Change them to
+match your firm's exact rules — see [INPUT_GUIDE.md](INPUT_GUIDE.md).
+
+> **Risk warning:** Automated trading carries substantial risk. The
+> guardrails reduce but do not eliminate the chance of breaching a prop-firm
+> rule (e.g. weekend gaps, slippage, broker outages). Always validate on a demo
+> / challenge account first.
+
+## Quick start
+
+- **MetaTrader 5:** see [QUICK_START.md](QUICK_START.md#metatrader-5).
+- **TradeLocker:** see [QUICK_START.md](QUICK_START.md#tradelocker) and
+  [`tradelocker_bot/`](tradelocker_bot/).
+
+## Backtesting
+
+The included `BACKTESTING_RESULTS*.md` files are **illustrative templates**, not
+verified results — run your own backtests in the MT5 Strategy Tester before
+trading. See [BACKTESTING_GUIDE.md](BACKTESTING_GUIDE.md).
+
+## License
+
+MIT — see the repository for details.
