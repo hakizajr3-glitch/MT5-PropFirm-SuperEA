@@ -56,9 +56,18 @@ match your firm's exact rules — see [INPUT_GUIDE.md](INPUT_GUIDE.md).
 
 ## Backtesting
 
-The included `BACKTESTING_RESULTS*.md` files are **illustrative templates**, not
-verified results — run your own backtests in the MT5 Strategy Tester before
-trading. See [BACKTESTING_GUIDE.md](BACKTESTING_GUIDE.md).
+A real Python backtester (`tradelocker_bot/backtest.py`) runs the **same
+strategy code** as the live bot over historical data:
+
+```bash
+pip install -r tradelocker_bot/requirements.txt -r tradelocker_bot/requirements-backtest.txt
+python -m tradelocker_bot.backtest --start 2010-01-01
+```
+
+See [BACKTESTING_RESULTS.md](BACKTESTING_RESULTS.md) for honest, reproducible
+numbers (the defaults are only marginally profitable and lose on EURUSD — they
+need optimization) and [BACKTESTING_GUIDE.md](BACKTESTING_GUIDE.md) for the MT5
+Strategy Tester workflow.
 
 ## License
 
