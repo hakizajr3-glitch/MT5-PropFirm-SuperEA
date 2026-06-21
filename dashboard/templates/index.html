@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SHROUDAGE — Autonomous Trading Control System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <h1>SHROUDAGE</h1>
+        <p class="tag">Autonomous Trading Intelligence &amp; Risk OS</p>
+      </div>
+    </div>
+    <div class="status-cluster">
+      <div class="pill big" id="system-status">—</div>
+      <div class="decision" id="decision">—</div>
+      <div class="meta">
+        <span id="source">—</span> · updated <span id="updated">—</span>
+      </div>
+    </div>
+    <div class="engine-cluster">
+      <div class="engine-state">
+        <span class="pill" id="engine-status">—</span>
+        <span class="engine-detail" id="engine-detail"></span>
+      </div>
+      <div class="engine-controls">
+        <button id="btn-start" class="btn btn-start">▶ Start Trading</button>
+        <button id="btn-stop" class="btn btn-stop">■ Stop</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Account</h2>
+      <div class="cards" id="account-cards"></div>
+    </section>
+
+    <div class="row">
+      <section class="panel grow">
+        <h2>Performance</h2>
+        <div class="cards" id="perf-cards"></div>
+      </section>
+      <section class="panel grow">
+        <h2>Risk &amp; Prop Limits</h2>
+        <div id="risk-block"></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Open Positions</h2>
+      <div class="table-wrap">
+        <table id="positions">
+          <thead><tr>
+            <th>Platform</th><th>Symbol</th><th>Side</th><th>Entry</th>
+            <th>Price</th><th>SL</th><th>TP</th><th>Qty</th><th>PnL</th>
+            <th>Risk%</th><th>Conf.</th><th>Agent</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Market View &amp; Scanner</h2>
+      <div class="market-grid" id="market"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Agent Network</h2>
+      <div class="agents" id="agents"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Human oversight required for real-money trading. Capital preservation first.</span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

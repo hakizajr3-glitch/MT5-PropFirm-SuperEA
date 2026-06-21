@@ -1,0 +1,5 @@
+# Dashboard web server. Install alongside the bot's requirements:
+#   pip install -r tradelocker_bot/requirements.txt -r dashboard/requirements.txt
+flask>=3.0.0,<4.0.0
+pandas>=2.0.0
+numpy>=1.24.0
