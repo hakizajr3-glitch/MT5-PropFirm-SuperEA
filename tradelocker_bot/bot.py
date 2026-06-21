@@ -53,9 +53,15 @@ class TradeLockerBot:
             password=c.password,
             server=c.server,
         )
+        # TL_ACCOUNT_ID may be either the account "id" (long number) or the
+        # short "accNum". Try acc_num first, fall back to account_id.
         if c.account_id:
-            kwargs["acc_num"] = c.account_id
-        self.api = TLAPI(**kwargs)
+            try:
+                self.api = TLAPI(acc_num=int(c.account_id), **kwargs)
+            except (ValueError, TypeError):
+                self.api = TLAPI(account_id=int(c.account_id), **kwargs)
+        else:
+            self.api = TLAPI(**kwargs)
 
         self.instrument_id = self.api.get_instrument_id_from_symbol_name(
             self.cfg.strategy.symbol
@@ -130,7 +136,7 @@ class TradeLockerBot:
                 logger.info("[dry-run] would close position %s", pid)
                 continue
             try:
-                self.api.close_position(int(pid))
+                self.api.close_position(position_id=int(pid))
             except Exception as exc:  # pragma: no cover - network
                 logger.error("Failed to close position %s: %s", pid, exc)
 
@@ -194,7 +200,10 @@ class TradeLockerBot:
                 logger.info("[dry-run] would modify %s SL -> %.5f", pid, new_sl)
                 continue
             try:
-                self.api.modify_position(int(pid), stop_loss=round(new_sl, 5))
+                self.api.modify_position(
+                    int(pid),
+                    {"stopLoss": round(new_sl, 5), "stopLossType": "absolute"},
+                )
                 logger.info("Trailed position %s SL -> %.5f", pid, new_sl)
             except Exception as exc:  # pragma: no cover - network
                 logger.error("modify_position failed for %s: %s", pid, exc)
