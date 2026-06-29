@@ -214,8 +214,94 @@ async function tick() {
   }
 }
 
+// ---- AI Hedge Fund rendering ----
+function hfActionClass(a) { return (a || "hold").toLowerCase(); }
+
+function renderHedgeFund(data) {
+  const c = document.getElementById("hf-results");
+  if (!data || !data.results || !data.results.length) {
+    c.innerHTML = '<span class="muted-text">No hedge fund analysis available yet.</span>';
+    return;
+  }
+  c.innerHTML = data.results.map(r => {
+    const rv = r.risk_verdict || {};
+    const approved = rv.approved;
+    const verdictClass = approved ? "approved" : (rv.direction === "HOLD" ? "hold" : "blocked");
+    const verdictLabel = approved
+      ? `APPROVED: ${rv.direction} (${(rv.consensus_confidence * 100).toFixed(0)}%)`
+      : `BLOCKED: ${(rv.blocked_reasons || []).join("; ") || "HOLD"}`;
+
+    const agentCards = (r.agent_signals || []).map(s => `
+      <div class="hf-agent-card">
+        <span class="hf-agent-name">${s.agent}</span>
+        <span class="hf-action ${hfActionClass(s.action)}">${s.action}</span>
+        <span class="hf-conf">${(s.confidence * 100).toFixed(0)}%</span>
+        <div class="hf-reason">${s.reasoning || ""}</div>
+      </div>
+    `).join("");
+
+    const consensus = rv.agents_agree != null
+      ? `<div class="hf-consensus">
+           <span>Direction <b>${rv.direction}</b></span>
+           <span>Confidence <b>${(rv.consensus_confidence * 100).toFixed(1)}%</b></span>
+           <span>Agents Agree <b>${rv.agents_agree}/${rv.agents_total}</b></span>
+           <span>Risk <b>${rv.risk_pct}%</b></span>
+         </div>` : "";
+
+    const orderBar = r.order
+      ? `<div class="hf-order-bar">ORDER: ${r.order.side.toUpperCase()} ${r.symbol} qty=${r.order.quantity} @ ~${r.order.entry_price} SL=${r.order.stop_loss} TP=${r.order.take_profit}</div>`
+      : "";
+
+    return `<div class="hf-symbol-block">
+      <div class="hf-symbol-header">
+        <span class="hf-sym">${r.symbol}</span>
+        <span class="hf-verdict ${verdictClass}">${verdictLabel}</span>
+      </div>
+      <div class="hf-agents-grid">${agentCards}</div>
+      ${consensus}${orderBar}
+    </div>`;
+  }).join("");
+}
+
+async function tickHedgeFund() {
+  try {
+    const res = await fetch("/api/hedge_fund", { cache: "no-store" });
+    const data = await res.json();
+    renderHedgeFund(data);
+  } catch (e) {
+    console.error("hedge fund fetch failed", e);
+  }
+}
+
+async function tickWebhook() {
+  try {
+    const res = await fetch("/webhook/signals", { cache: "no-store" });
+    const signals = await res.json();
+    const c = document.getElementById("webhook-signals");
+    if (!signals || !signals.length) {
+      c.innerHTML = '<span class="muted-text">No webhook signals received yet. POST to <code>/webhook/tradingview</code></span>';
+      return;
+    }
+    c.innerHTML = '<div class="webhook-list">' + signals.slice(-20).reverse().map(s =>
+      `<div class="webhook-item">
+        <span class="ws-action ${(s.action || '').toLowerCase()}">${(s.action || '').toUpperCase()}</span>
+        <span>${s.symbol}</span>
+        <span>${s.price != null ? fmt(s.price, 5) : ""}</span>
+        <span>${s.comment || ""}</span>
+        <span class="ws-time">${(s.received_at || "").replace("T", " ")}</span>
+      </div>`
+    ).join("") + '</div>';
+  } catch (e) {
+    console.error("webhook signals fetch failed", e);
+  }
+}
+
 document.getElementById("btn-start").addEventListener("click", () => setEngine("start"));
 document.getElementById("btn-stop").addEventListener("click", () => setEngine("stop"));
 
 tick();
+tickHedgeFund();
+tickWebhook();
 setInterval(tick, REFRESH_MS);
+setInterval(tickHedgeFund, REFRESH_MS);
+setInterval(tickWebhook, REFRESH_MS * 2);

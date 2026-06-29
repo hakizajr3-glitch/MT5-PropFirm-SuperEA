@@ -25,15 +25,23 @@ from .engine import ENGINE
 from .providers import DEFAULT_SYMBOLS, DemoProvider, LiveProvider
 from .state import DashboardConfig, build_state
 
+from ai_hedge_fund.webhook import webhook_bp
+from ai_hedge_fund.orchestrator import Orchestrator
+from ai_hedge_fund.agents.base import MarketSnapshot
+from ai_hedge_fund.risk_manager import RiskLimits
+
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("shroudage.app")
 
 app = Flask(__name__)
+app.register_blueprint(webhook_bp)
 
 _lock = threading.Lock()
 _cache = {"ts": 0.0, "state": None}
 _provider = None
+_hf_orchestrator: Orchestrator | None = None
+_hf_cache = {"ts": 0.0, "report": None}
 
 
 def _symbols() -> list[str]:
@@ -63,6 +71,51 @@ def get_provider():
     if _provider is None:
         _provider = _make_provider()
     return _provider
+
+
+def _get_orchestrator() -> Orchestrator:
+    global _hf_orchestrator
+    if _hf_orchestrator is None:
+        _hf_orchestrator = Orchestrator()
+    return _hf_orchestrator
+
+
+def get_hedge_fund_report() -> dict | None:
+    """Run the AI hedge fund pipeline and cache the result."""
+    ttl = float(os.getenv("SHROUD_REFRESH_SECS", "5"))
+    now = time.time()
+    with _lock:
+        if _hf_cache["report"] is not None and now - _hf_cache["ts"] < ttl:
+            return _hf_cache["report"]
+
+    provider = get_provider()
+    account = provider.get_account()
+    if not account:
+        return None
+
+    orch = _get_orchestrator()
+    snapshots = []
+    for sym in provider.symbols:
+        bars = provider.get_bars(sym)
+        if bars is not None and len(bars) >= 52:
+            snapshots.append(MarketSnapshot(symbol=sym, bars=bars))
+
+    if not snapshots:
+        return None
+
+    report = orch.run_cycle(
+        snapshots=snapshots,
+        equity=account.get("equity", 0),
+        balance=account.get("balance", 0),
+        day_start_equity=account.get("day_start_equity", account.get("balance", 0)),
+        peak_equity=account.get("peak_equity", account.get("equity", 0)),
+        current_daily_pnl=account.get("daily_pnl", 0),
+        open_position_count=account.get("positions_count", 0),
+    )
+    result = report.as_dict()
+    with _lock:
+        _hf_cache.update(ts=time.time(), report=result)
+    return result
 
 
 def _invalidate_cache() -> None:
@@ -108,6 +161,12 @@ def api_stop():
     _invalidate_cache()
     logger.info("Engine stop requested via dashboard")
     return jsonify({"ok": True, "engine": status})
+
+
+@app.route("/api/hedge_fund")
+def api_hedge_fund():
+    report = get_hedge_fund_report()
+    return jsonify(report or {"results": [], "orders": []})
 
 
 @app.route("/healthz")
