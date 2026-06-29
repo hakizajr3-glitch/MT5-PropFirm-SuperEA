@@ -131,3 +131,60 @@ tbody tr:hover { background: #0c1219; }
 footer { text-align: center; color: var(--muted); font-size: 11px; padding: 16px; border-top: 1px solid var(--line); }
 .warnbar { background: #3d2a10; color: var(--amber); border: 1px solid #6e521d; border-radius: 10px;
   padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+
+/* AI Hedge Fund deliberation panel */
+.hf-subtitle { color: var(--muted); font-size: 12px; margin: -8px 0 14px; }
+.muted-text { color: var(--muted); font-size: 12px; }
+.muted-text code { background: #1c2532; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+.hf-symbol-block { margin-bottom: 20px; }
+.hf-symbol-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 10px 10px 0 0; margin-bottom: 0;
+}
+.hf-symbol-header .hf-sym { font-size: 16px; font-weight: 700; }
+.hf-symbol-header .hf-verdict {
+  font-size: 13px; font-weight: 700; padding: 3px 12px; border-radius: 999px;
+}
+.hf-verdict.approved { background: #10381f; color: var(--green); border: 1px solid #1d5a35; }
+.hf-verdict.blocked { background: #3d1118; color: var(--red); border: 1px solid #6e1d2a; }
+.hf-verdict.hold { background: #1c2532; color: var(--muted); border: 1px solid var(--line); }
+.hf-agents-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px;
+  padding: 12px; background: #0a0f16; border: 1px solid var(--line);
+  border-top: none; border-radius: 0 0 10px 10px;
+}
+.hf-agent-card {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px;
+}
+.hf-agent-card .hf-agent-name { font-weight: 650; font-size: 13px; }
+.hf-agent-card .hf-action { font-weight: 700; font-size: 12px; margin-left: 6px; }
+.hf-agent-card .hf-action.buy { color: var(--green); }
+.hf-agent-card .hf-action.sell { color: var(--red); }
+.hf-agent-card .hf-action.hold { color: var(--muted); }
+.hf-agent-card .hf-action.short { color: var(--amber); }
+.hf-agent-card .hf-action.cover { color: var(--blue); }
+.hf-agent-card .hf-conf { color: var(--muted); font-size: 11px; }
+.hf-agent-card .hf-reason { color: var(--muted); font-size: 10px; margin-top: 4px; line-height: 1.3; }
+.hf-consensus {
+  display: flex; gap: 16px; padding: 8px 14px; font-size: 12px;
+  color: var(--muted); flex-wrap: wrap;
+}
+.hf-consensus b { color: var(--text); }
+.hf-order-bar {
+  background: #10381f; border: 1px solid #1d5a35; border-radius: 8px;
+  padding: 8px 14px; margin-top: 8px; font-size: 12px; color: var(--green);
+}
+
+/* Webhook signals */
+.webhook-list { display: flex; flex-direction: column; gap: 6px; }
+.webhook-item {
+  display: flex; gap: 12px; align-items: center;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; font-size: 12px;
+}
+.webhook-item .ws-action { font-weight: 700; }
+.webhook-item .ws-action.buy { color: var(--green); }
+.webhook-item .ws-action.sell { color: var(--red); }
+.webhook-item .ws-time { color: var(--muted); margin-left: auto; }
