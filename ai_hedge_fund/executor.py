@@ -42,8 +42,9 @@ class TradeLockerExecutor:
         self.api = api
 
     def _get_instrument_id(self, symbol: str) -> int | None:
-        if symbol in self._instrument_ids:
-            return self._instrument_ids[symbol]
+        cached = self._instrument_ids.get(symbol)
+        if cached is not None:
+            return cached
         if self.api is None:
             return None
         for name in (symbol, f"{symbol}.R", f"{symbol}.r"):
@@ -54,7 +55,7 @@ class TradeLockerExecutor:
             if iid is not None:
                 self._instrument_ids[symbol] = iid
                 return iid
-        self._instrument_ids[symbol] = None
+        # don't cache misses — transient API errors shouldn't poison later calls
         return None
 
     def execute(self, order: TradeOrder) -> ExecutionResult:

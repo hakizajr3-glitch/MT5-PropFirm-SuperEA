@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import numpy as np
 import pandas as pd
 import pytest
@@ -59,6 +60,7 @@ class TestOrchestrator:
             day_start_equity=1000, peak_equity=1000,
         )
         d = result.as_dict()
+        json.dumps(d)  # verify JSON-serialisable
         assert d["symbol"] == "XAUUSD"
         assert len(d["agent_signals"]) == 7
         assert "risk_verdict" in d

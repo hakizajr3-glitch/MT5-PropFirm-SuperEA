@@ -32,7 +32,7 @@ class DruckenmillerAgent(BaseAgent):
 
     def analyze(self, snapshot: MarketSnapshot) -> AgentSignal:
         df = snapshot.bars
-        if len(df) < 30:
+        if len(df) < 52:
             return self._hold(snapshot, "Insufficient bars for swing analysis")
 
         close = df["close"]

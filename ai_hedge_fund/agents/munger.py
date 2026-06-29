@@ -85,7 +85,18 @@ class MungerAgent(BaseAgent):
         if bearish_div:
             bear_confirms.append("bearish RSI divergence")
 
-        if len(bull_confirms) >= self.min_confirmations:
+        bull_met = len(bull_confirms) >= self.min_confirmations
+        bear_met = len(bear_confirms) >= self.min_confirmations
+
+        if bull_met and bear_met:
+            return AgentSignal(
+                agent_name=self.name, symbol=snapshot.symbol,
+                action=Action.HOLD, confidence=0.0,
+                reasoning=f"Ambiguous confluence (bull={len(bull_confirms)}, bear={len(bear_confirms)}) — no clear direction",
+                indicators=indicators, weight=self.default_weight,
+            )
+
+        if bull_met:
             conf = round(min(1.0, len(bull_confirms) / 5.0), 3)
             return AgentSignal(
                 agent_name=self.name, symbol=snapshot.symbol,
@@ -94,7 +105,7 @@ class MungerAgent(BaseAgent):
                 indicators=indicators, weight=self.default_weight,
             )
 
-        if len(bear_confirms) >= self.min_confirmations:
+        if bear_met:
             conf = round(min(1.0, len(bear_confirms) / 5.0), 3)
             return AgentSignal(
                 agent_name=self.name, symbol=snapshot.symbol,

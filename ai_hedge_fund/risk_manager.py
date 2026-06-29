@@ -96,6 +96,13 @@ class RiskManagerAgent:
 
         consensus_confidence = round(min(consensus_confidence, 1.0), 3)
 
+        # pre-compute candidate risk for projected-impact checks
+        if direction != Action.HOLD and consensus_confidence >= lim.min_consensus_confidence:
+            scale = min(1.0, (consensus_confidence - 0.3) / 0.7)
+            candidate_risk_pct = round(lim.max_risk_per_trade_pct * max(0.3, scale), 3)
+        else:
+            candidate_risk_pct = 0.0
+
         # risk checks
         blocked = []
         reasons = []
@@ -122,9 +129,10 @@ class RiskManagerAgent:
         if open_position_count >= lim.max_open_positions:
             blocked.append(f"Max positions reached ({open_position_count}/{lim.max_open_positions})")
 
-        # portfolio heat
-        if open_risk_pct >= lim.max_portfolio_heat_pct:
-            blocked.append(f"Portfolio heat {open_risk_pct:.2f}% >= {lim.max_portfolio_heat_pct}%")
+        # portfolio heat (include projected impact of this trade)
+        projected_heat = open_risk_pct + candidate_risk_pct
+        if projected_heat > lim.max_portfolio_heat_pct:
+            blocked.append(f"Portfolio heat {open_risk_pct:.2f}% + {candidate_risk_pct:.2f}% = {projected_heat:.2f}% > {lim.max_portfolio_heat_pct}%")
 
         # consensus checks
         if direction == Action.HOLD:
@@ -136,12 +144,8 @@ class RiskManagerAgent:
 
         approved = len(blocked) == 0
 
-        # scale risk by confidence: base 0.5% at confidence 0.4, up to max at 1.0
-        if approved:
-            scale = min(1.0, (consensus_confidence - 0.3) / 0.7)
-            risk_pct = round(lim.max_risk_per_trade_pct * max(0.3, scale), 3)
-        else:
-            risk_pct = 0.0
+        # finalise risk
+        risk_pct = candidate_risk_pct if approved else 0.0
 
         if approved:
             reasons.append(f"Approved: {direction.value} at {risk_pct}% risk, "

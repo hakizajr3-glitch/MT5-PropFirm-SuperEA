@@ -38,6 +38,7 @@ class HedgeFundRunner:
         self.executor = TradeLockerExecutor(dry_run=self.cfg.dry_run)
         self.api = None
         self._last_report: dict | None = None
+        self._peak_equity: float = 0.0  # high-water mark for DD tracking
 
     def connect_live(self) -> None:
         """Connect to TradeLocker for live data and execution."""
@@ -85,12 +86,19 @@ class HedgeFundRunner:
             logger.error("Failed to fetch bars for %s: %s", symbol, exc)
             return None
         df = pd.DataFrame(hist)
+        if df.empty:
+            logger.warning("Empty price history for %s", symbol)
+            return None
         rename = {"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "t": "time"}
         df = df.rename(columns=rename)
-        for col in ("open", "high", "low", "close"):
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-        return df.dropna(subset=["open", "high", "low", "close"]).reset_index(drop=True)
+        required = ["open", "high", "low", "close"]
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            logger.warning("Malformed history for %s: missing columns %s", symbol, missing)
+            return None
+        for col in required:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        return df.dropna(subset=required).reset_index(drop=True)
 
     def _get_account_state(self) -> dict:
         if self.api is None:
@@ -100,11 +108,14 @@ class HedgeFundRunner:
             st = self.api.get_account_state()
             bal = float(st.get("balance", 0))
             eq = float(st.get("projectedBalance", bal))
+            # track high-water mark for drawdown detection
+            if eq > self._peak_equity:
+                self._peak_equity = eq
             return {
                 "balance": bal,
                 "equity": eq,
                 "day_start_equity": eq - float(st.get("todayNet", 0)),
-                "peak_equity": eq,
+                "peak_equity": self._peak_equity,
                 "open_pnl": float(st.get("openNetPnL", 0)),
                 "positions_count": int(st.get("positionsCount", 0)),
             }

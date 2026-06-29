@@ -69,15 +69,22 @@ def tradingview_alert():
 
     symbol = str(data.get("symbol", "UNKNOWN")).upper()
     action = str(data.get("action", "")).lower()
-    price = data.get("price")
+    raw_price = data.get("price")
     timeframe = data.get("timeframe", "")
     comment = data.get("comment", "")
+
+    parsed_price = None
+    if raw_price is not None:
+        try:
+            parsed_price = float(raw_price)
+        except (ValueError, TypeError):
+            return jsonify({"error": "invalid price value", "price": str(raw_price)}), 400
 
     signal_record = {
         "source": "tradingview",
         "symbol": symbol,
         "action": action,
-        "price": float(price) if price is not None else None,
+        "price": parsed_price,
         "timeframe": timeframe,
         "comment": comment,
         "raw": data,
@@ -90,7 +97,7 @@ def tradingview_alert():
         if len(_webhook_signals) > _MAX_HISTORY:
             _webhook_signals.pop(0)
 
-    logger.info("TV webhook: %s %s @ %s — %s", action.upper(), symbol, price, comment)
+    logger.info("TV webhook: %s %s @ %s — %s", action.upper(), symbol, parsed_price, comment)
 
     return jsonify({"ok": True, "received": signal_record}), 200
 

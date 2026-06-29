@@ -13,6 +13,7 @@ on ATR and the risk budget allocated by the Risk Manager.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 
 from tradelocker_bot.strategy import atr as calc_atr
@@ -79,10 +80,17 @@ class PortfolioManagerAgent:
             )
 
         df = snapshot.bars
-        price = float(df["close"].iloc[-1])
-        atr_val = float(calc_atr(df, self.atr_period).iloc[-1])
+        try:
+            price = float(df["close"].iloc[-1])
+            atr_val = float(calc_atr(df, self.atr_period).iloc[-1])
+        except (IndexError, KeyError, TypeError):
+            return PortfolioDecision(
+                symbol=verdict.symbol, action=Action.HOLD,
+                reasoning="Missing price or ATR data",
+                risk_verdict=verdict,
+            )
 
-        if atr_val <= 0:
+        if not math.isfinite(price) or not math.isfinite(atr_val) or atr_val <= 0:
             return PortfolioDecision(
                 symbol=verdict.symbol, action=Action.HOLD,
                 reasoning="ATR is zero — cannot calculate stops",
@@ -111,8 +119,14 @@ class PortfolioManagerAgent:
         else:
             qty = 0.01
 
-        # floor to 0.01 lots
-        qty = max(0.01, round(qty, 2))
+        # floor to 0.01 lots (skip if too small to avoid over-risking)
+        qty = round(qty, 2)
+        if qty < 0.01:
+            return PortfolioDecision(
+                symbol=verdict.symbol, action=Action.HOLD,
+                reasoning=f"Position size {qty:.4f} below minimum 0.01 lots — skipping to protect risk budget",
+                risk_verdict=verdict,
+            )
 
         reasoning = (f"PM decision: {direction.value} {snapshot.symbol} "
                      f"qty={qty:.2f} @ ~{price:.5f}, "

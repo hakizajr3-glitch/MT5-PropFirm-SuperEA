@@ -21,6 +21,7 @@ class BuffettAgent(BaseAgent):
     adx_min: float = 25.0
     rsi_buy_range: tuple[float, float] = (45.0, 70.0)
     rsi_sell_range: tuple[float, float] = (30.0, 55.0)
+    max_atr_pct: float = 5.0  # reject entries when volatility is too high
 
     def analyze(self, snapshot: MarketSnapshot) -> AgentSignal:
         df = snapshot.bars
@@ -43,6 +44,15 @@ class BuffettAgent(BaseAgent):
             "ema200": round(ema200, 5), "adx": round(adx_val, 2),
             "rsi": round(rsi_val, 2), "atr_pct": round(atr_pct, 3),
         }
+
+        # volatility filter: too much ATR = dangerous entry
+        if atr_pct > self.max_atr_pct:
+            return AgentSignal(
+                agent_name=self.name, symbol=snapshot.symbol,
+                action=Action.HOLD, confidence=0.0,
+                reasoning=f"Volatility too high (ATR%={atr_pct:.2f}% > {self.max_atr_pct}%)",
+                indicators=indicators, weight=self.default_weight,
+            )
 
         # bullish alignment: price > EMA20 > EMA50 > EMA200
         bull_aligned = price > ema20 > ema50 > ema200
