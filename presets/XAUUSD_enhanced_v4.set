@@ -1,0 +1,58 @@
+; PropFirm SuperEA v4.0 - XAUUSD Enhanced Preset (MT5)
+; Enable all v4.0 filters for maximum signal quality.
+; For FTMO / The Funded Trader / TradeLocker-based firms (5% daily / 10% total).
+InpFastEMA=20
+InpSlowEMA=100
+InpATRPeriod=14
+InpSL_ATR=2.0
+InpTP_ATR=4.0
+InpUseRSIFilter=true
+InpRSIPeriod=14
+InpRSIBuyMin=50.0
+InpRSISellMax=50.0
+; Enhanced Filters (v4.0)
+InpUseADXFilter=true
+InpADXPeriod=14
+InpADXMin=20.0
+InpUseMACDFilter=true
+InpMACDFast=12
+InpMACDSlow=26
+InpMACDSignal=9
+InpUseEMA200Filter=true
+InpEMA200Period=200
+InpUseVolFilter=true
+InpVolLookback=50
+InpVolMin=0.5
+InpVolMax=2.5
+; Risk
+InpUseRiskPercent=true
+InpRiskPercent=1.5
+InpFixedLot=0.10
+InpMaxOpenPositions=1
+InpMaxSpreadPoints=50
+InpUseAdaptiveSizing=true
+InpAdaptiveMinPct=0.5
+InpAdaptiveMaxPct=2.0
+InpUseDDCushion=true
+InpDDCushionStart=50.0
+; Prop-Firm Guardrails (FTMO/TFT with buffer)
+InpMaxDailyLossPct=4.5
+InpMaxTotalDDPct=9.0
+InpCloseOnDailyStop=true
+InpCloseOnTotalStop=true
+; Session
+InpUseSession=true
+InpStartHour=7
+InpEndHour=20
+InpTradeMonday=true
+InpTradeFriday=true
+; Exit Management
+InpUseBreakEven=true
+InpBE_TriggerPoints=150
+InpBE_LockPoints=20
+InpUseTrailing=true
+InpTrailStartPoints=200
+InpTrailStepPoints=100
+; General
+InpMagicNumber=260621
+InpTradeComment=PropFirm_SuperEA_v4

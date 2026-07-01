@@ -8,6 +8,9 @@ Position sizing is risk-based: every trade risks a fixed % of current equity, so
 a stop-out loses exactly that % (currency-agnostic). Transaction cost is modelled
 as a per-side spread in basis points.
 
+v4.0 adds support for enhanced signal filters (ADX, MACD, EMA200, volatility
+regime) and --enhanced mode.
+
 Approximations (documented so results aren't oversold):
 - Uses end-of-day (daily) bars by default. Intraday behaviour will differ.
 - Entries fill at the next bar's open after a signal bar.
@@ -17,6 +20,7 @@ Approximations (documented so results aren't oversold):
 
 Usage:
     python -m tradelocker_bot.backtest                      # default instruments
+    python -m tradelocker_bot.backtest --enhanced            # v4.0 enhanced mode
     python -m tradelocker_bot.backtest --tickers EURUSD=X GC=F --start 2015-01-01
 """
 
@@ -139,14 +143,40 @@ def run_backtest(df: pd.DataFrame, scfg: StrategyConfig,
     fast = strat.ema(df["close"], scfg.fast_ema).to_numpy()
     slow = strat.ema(df["close"], scfg.slow_ema).to_numpy()
     rsi = strat.rsi(df["close"], scfg.rsi_period).to_numpy()
-    atr = strat.atr(df, scfg.atr_period).to_numpy()
+    atr_arr = strat.atr(df, scfg.atr_period).to_numpy()
     op = df["open"].to_numpy()
     hi = df["high"].to_numpy()
     lo = df["low"].to_numpy()
     cl = df["close"].to_numpy()
     n = len(df)
 
+    # Pre-compute enhanced indicator arrays when filters are enabled
+    use_adx = getattr(scfg, "use_adx_filter", False)
+    use_macd_f = getattr(scfg, "use_macd_filter", False)
+    use_ema200 = getattr(scfg, "use_ema200_filter", False)
+    use_vol = getattr(scfg, "use_volatility_filter", False)
+    enhanced = use_adx or use_macd_f or use_ema200 or use_vol
+
+    adx_arr = strat.adx(df, getattr(scfg, "adx_period", 14)).to_numpy() if use_adx else None
+    macd_hist_arr = None
+    if use_macd_f:
+        _, _, hist_s = strat.macd(df["close"],
+                                  getattr(scfg, "macd_fast", 12),
+                                  getattr(scfg, "macd_slow", 26),
+                                  getattr(scfg, "macd_signal", 9))
+        macd_hist_arr = hist_s.to_numpy()
+    ema200_arr = None
+    if use_ema200:
+        ema200_arr = strat.ema(df["close"], getattr(scfg, "ema200_period", 200)).to_numpy()
+    vol_ratio_arr = None
+    if use_vol:
+        vol_ratio_arr = strat.volatility_ratio(
+            df, scfg.atr_period, getattr(scfg, "vol_lookback", 50)
+        ).to_numpy()
+
     warmup = max(scfg.slow_ema, scfg.atr_period, scfg.rsi_period) + 2
+    if use_ema200:
+        warmup = max(warmup, getattr(scfg, "ema200_period", 200) + 2)
     equity = params.start_equity
     eq_points = [equity]
     trades: list[Trade] = []
@@ -160,9 +190,10 @@ def run_backtest(df: pd.DataFrame, scfg: StrategyConfig,
     entry_idx = 0
     halted = False
 
-    def signal_at(i: int) -> int:
+    def signal_at(i: int) -> tuple[int, int]:
+        """Return (signal, strength) at bar i."""
         if np.isnan(fast[i]) or np.isnan(slow[i]) or np.isnan(fast[i - 1]):
-            return strat.NONE
+            return strat.NONE, 0
         up = fast[i - 1] <= slow[i - 1] and fast[i] > slow[i]
         dn = fast[i - 1] >= slow[i - 1] and fast[i] < slow[i]
         if scfg.use_rsi_filter and not np.isnan(rsi[i]):
@@ -170,7 +201,50 @@ def run_backtest(df: pd.DataFrame, scfg: StrategyConfig,
                 up = False
             if dn and rsi[i] > scfg.rsi_sell_max:
                 dn = False
-        return strat.BUY if up else strat.SELL if dn else strat.NONE
+        sig = strat.BUY if up else strat.SELL if dn else strat.NONE
+        if sig == strat.NONE or not enhanced:
+            return sig, 100
+
+        # Enhanced filter checks
+        confirmations = 0
+        total_checks = 0
+
+        if use_adx and adx_arr is not None:
+            total_checks += 1
+            adx_val = adx_arr[i] if not np.isnan(adx_arr[i]) else 0.0
+            if adx_val >= getattr(scfg, "adx_min", 20.0):
+                confirmations += 1
+            else:
+                return strat.NONE, 0
+
+        if use_macd_f and macd_hist_arr is not None:
+            total_checks += 1
+            mh = macd_hist_arr[i] if not np.isnan(macd_hist_arr[i]) else 0.0
+            if (sig == strat.BUY and mh > 0) or (sig == strat.SELL and mh < 0):
+                confirmations += 1
+            else:
+                return strat.NONE, 0
+
+        if use_ema200 and ema200_arr is not None:
+            total_checks += 1
+            e200 = ema200_arr[i] if not np.isnan(ema200_arr[i]) else cl[i]
+            if (sig == strat.BUY and cl[i] > e200) or (sig == strat.SELL and cl[i] < e200):
+                confirmations += 1
+            else:
+                return strat.NONE, 0
+
+        if use_vol and vol_ratio_arr is not None:
+            total_checks += 1
+            vr = vol_ratio_arr[i] if not np.isnan(vol_ratio_arr[i]) else 1.0
+            vol_min = getattr(scfg, "vol_min", 0.5)
+            vol_max = getattr(scfg, "vol_max", 2.5)
+            if vol_min <= vr <= vol_max:
+                confirmations += 1
+            else:
+                return strat.NONE, 0
+
+        strength = min(100, 40 + int(60 * confirmations / total_checks)) if total_checks > 0 else 100
+        return sig, strength
 
     def close_trade(exit_price: float, j: int, reason: str) -> None:
         nonlocal equity, in_pos
@@ -202,7 +276,7 @@ def run_backtest(df: pd.DataFrame, scfg: StrategyConfig,
                     exited = True
 
             if not exited:
-                a = atr[i] if not np.isnan(atr[i]) else 0.0
+                a = atr_arr[i] if not np.isnan(atr_arr[i]) else 0.0
                 if a > 0:
                     profit = (cl[i] - entry) if side == strat.BUY else (entry - cl[i])
                     if side == strat.BUY:
@@ -225,8 +299,8 @@ def run_backtest(df: pd.DataFrame, scfg: StrategyConfig,
 
         # ---- look for a new entry (signal on bar i, fill at open of i+1) ----
         if not in_pos and not halted:
-            sig = signal_at(i)
-            a = atr[i]
+            sig, strength = signal_at(i)
+            a = atr_arr[i]
             if sig != strat.NONE and not np.isnan(a) and a > 0:
                 entry = op[i + 1]
                 sl, tp = strat.stop_levels(sig, entry, a, scfg.sl_atr, scfg.tp_atr)
@@ -267,10 +341,21 @@ def main() -> int:
     p.add_argument("--fast", type=int, default=20)
     p.add_argument("--slow", type=int, default=50)
     p.add_argument("--no-rsi", action="store_true")
+    p.add_argument("--enhanced", action="store_true",
+                   help="Enable v4.0 enhanced filters (ADX, MACD, EMA200, vol regime)")
+    p.add_argument("--adx-min", type=float, default=20.0,
+                   help="Minimum ADX for trend-strength gate (default 20)")
     args = p.parse_args()
 
     scfg = StrategyConfig(fast_ema=args.fast, slow_ema=args.slow,
                           use_rsi_filter=not args.no_rsi)
+    if args.enhanced:
+        scfg.use_adx_filter = True
+        scfg.adx_min = args.adx_min
+        scfg.use_macd_filter = True
+        scfg.use_ema200_filter = True
+        scfg.use_volatility_filter = True
+
     params = BacktestParams(risk_percent=args.risk)
 
     results = []
@@ -278,7 +363,8 @@ def main() -> int:
         df = load_data(t, args.start, args.end)
         res = run_backtest(df, scfg, params, ticker=t)
         results.append(res)
-        print(f"{t}: {res.n_trades} trades, win {res.win_rate:.1f}%, "
+        mode = "ENHANCED" if args.enhanced else "baseline"
+        print(f"{t} [{mode}]: {res.n_trades} trades, win {res.win_rate:.1f}%, "
               f"PF {res.profit_factor:.2f}, return {res.total_return_pct:.1f}%, "
               f"maxDD {res.max_drawdown_pct:.1f}%")
 

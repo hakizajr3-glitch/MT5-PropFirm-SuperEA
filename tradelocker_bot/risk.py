@@ -120,6 +120,40 @@ class RiskManager:
         return hour >= cfg.start_hour or hour < cfg.end_hour
 
     # ---- sizing ------------------------------------------------------
+    def _effective_risk_pct(self, signal_strength: int = 100) -> float:
+        """Compute effective risk % after adaptive sizing and DD cushion.
+
+        v4.0: scales risk based on signal strength (0-100) and proximity to
+        drawdown limits.
+        """
+        cfg = self.cfg
+        base_pct = cfg.risk_percent
+
+        # Adaptive sizing: scale between min and max based on signal strength
+        if getattr(cfg, "use_adaptive_sizing", False) and signal_strength < 100:
+            min_pct = getattr(cfg, "adaptive_min_pct", 0.5)
+            max_pct = getattr(cfg, "adaptive_max_pct", 2.0)
+            ratio = signal_strength / 100.0
+            base_pct = min_pct + (max_pct - min_pct) * ratio
+
+        # DD cushion: reduce risk as drawdown grows
+        if getattr(cfg, "use_dd_cushion", False) and self.state.peak_equity > 0:
+            equity = self.state.peak_equity  # conservative: use last known
+            dd_pct = 0.0
+            if self.state.peak_equity > 0:
+                dd_pct = max(0.0, (self.state.peak_equity - self.state.day_start_equity)
+                             / self.state.peak_equity * 100.0)
+            max_dd = cfg.max_total_dd_pct if cfg.max_total_dd_pct > 0 else 10.0
+            dd_usage = dd_pct / max_dd * 100.0  # how much of the DD budget is used
+            cushion_start = getattr(cfg, "dd_cushion_start", 50.0)
+            if dd_usage >= cushion_start:
+                # Linear reduction: at cushion_start% used -> full risk;
+                # at 100% used -> 25% of risk
+                scale = max(0.25, 1.0 - 0.75 * (dd_usage - cushion_start) / (100.0 - cushion_start))
+                base_pct *= scale
+
+        return max(0.01, base_pct)
+
     def position_size(
         self,
         balance: float,
@@ -128,12 +162,16 @@ class RiskManager:
         min_qty: float = 0.01,
         max_qty: float = 100.0,
         qty_step: float = 0.01,
+        signal_strength: int = 100,
     ) -> float:
         """Quantity to trade.
 
         `money_per_price_per_qty` = account-currency loss for a 1.0 price move
         on 1 unit of quantity (e.g. contract size). For a fixed-quantity config
         this is ignored.
+
+        `signal_strength` (0-100): v4.0 adaptive sizing input. Higher values
+        risk more when adaptive sizing is enabled.
         """
         cfg = self.cfg
         if not cfg.use_risk_percent:
@@ -142,7 +180,8 @@ class RiskManager:
         if sl_distance_price <= 0 or money_per_price_per_qty <= 0 or balance <= 0:
             return _round_step(cfg.fixed_quantity, min_qty, max_qty, qty_step)
 
-        risk_money = balance * cfg.risk_percent / 100.0
+        effective_pct = self._effective_risk_pct(signal_strength)
+        risk_money = balance * effective_pct / 100.0
         loss_per_qty = sl_distance_price * money_per_price_per_qty
         if loss_per_qty <= 0:
             return _round_step(cfg.fixed_quantity, min_qty, max_qty, qty_step)
