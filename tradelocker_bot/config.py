@@ -2,6 +2,9 @@
 
 Values are read from environment variables (optionally loaded from a `.env`
 file). See `.env.example` for the full list and documentation.
+
+v4.0 adds enhanced signal filters (ADX, MACD, EMA200, volatility regime),
+adaptive risk sizing, and prop-firm profile presets.
 """
 
 from __future__ import annotations
@@ -69,6 +72,20 @@ class StrategyConfig:
     rsi_period: int = 14
     rsi_buy_min: float = 50.0
     rsi_sell_max: float = 50.0
+    # ── Enhanced filters (v4.0) ──
+    use_adx_filter: bool = False     # ADX trend-strength gate
+    adx_period: int = 14
+    adx_min: float = 20.0            # minimum ADX to allow a trade
+    use_macd_filter: bool = False    # MACD histogram confirmation
+    macd_fast: int = 12
+    macd_slow: int = 26
+    macd_signal: int = 9
+    use_ema200_filter: bool = False   # price must be on correct side of EMA200
+    ema200_period: int = 200
+    use_volatility_filter: bool = False  # ATR ratio guard
+    vol_lookback: int = 50
+    vol_min: float = 0.5             # min ATR ratio
+    vol_max: float = 2.5             # max ATR ratio
 
     @classmethod
     def from_env(cls) -> "StrategyConfig":
@@ -85,6 +102,19 @@ class StrategyConfig:
             rsi_period=_get_int("TL_RSI_PERIOD", 14),
             rsi_buy_min=_get_float("TL_RSI_BUY_MIN", 50.0),
             rsi_sell_max=_get_float("TL_RSI_SELL_MAX", 50.0),
+            use_adx_filter=_get_bool("TL_USE_ADX", False),
+            adx_period=_get_int("TL_ADX_PERIOD", 14),
+            adx_min=_get_float("TL_ADX_MIN", 20.0),
+            use_macd_filter=_get_bool("TL_USE_MACD", False),
+            macd_fast=_get_int("TL_MACD_FAST", 12),
+            macd_slow=_get_int("TL_MACD_SLOW", 26),
+            macd_signal=_get_int("TL_MACD_SIGNAL", 9),
+            use_ema200_filter=_get_bool("TL_USE_EMA200", False),
+            ema200_period=_get_int("TL_EMA200_PERIOD", 200),
+            use_volatility_filter=_get_bool("TL_USE_VOL_FILTER", False),
+            vol_lookback=_get_int("TL_VOL_LOOKBACK", 50),
+            vol_min=_get_float("TL_VOL_MIN", 0.5),
+            vol_max=_get_float("TL_VOL_MAX", 2.5),
         )
 
 
@@ -104,6 +134,12 @@ class RiskConfig:
     end_hour: int = 20
     trade_monday: bool = True
     trade_friday: bool = True
+    # ── Adaptive sizing (v4.0) ──
+    use_adaptive_sizing: bool = False  # scale risk by signal strength
+    adaptive_min_pct: float = 0.5     # min risk % (weak signals)
+    adaptive_max_pct: float = 2.0     # max risk % (full-confirmation signals)
+    use_dd_cushion: bool = False      # reduce risk near drawdown limits
+    dd_cushion_start: float = 50.0    # start reducing at this % of max DD used
 
     @classmethod
     def from_env(cls) -> "RiskConfig":
@@ -121,6 +157,11 @@ class RiskConfig:
             end_hour=_get_int("TL_END_HOUR", 20),
             trade_monday=_get_bool("TL_TRADE_MONDAY", True),
             trade_friday=_get_bool("TL_TRADE_FRIDAY", True),
+            use_adaptive_sizing=_get_bool("TL_USE_ADAPTIVE_SIZING", False),
+            adaptive_min_pct=_get_float("TL_ADAPTIVE_MIN_PCT", 0.5),
+            adaptive_max_pct=_get_float("TL_ADAPTIVE_MAX_PCT", 2.0),
+            use_dd_cushion=_get_bool("TL_USE_DD_CUSHION", False),
+            dd_cushion_start=_get_float("TL_DD_CUSHION_START", 50.0),
         )
 
 
@@ -171,3 +212,53 @@ class BotConfig:
             state_file=os.getenv("TL_STATE_FILE", ".tl_bot_state.json"),
             dry_run=_get_bool("TL_DRY_RUN", False),
         )
+
+
+# ────────────────────────────────────────────────────────────────────
+# Prop-firm profile presets (v4.0)
+# ────────────────────────────────────────────────────────────────────
+
+PROP_FIRM_PROFILES: dict[str, dict] = {
+    "ftmo": {
+        "max_daily_loss_pct": 4.5,   # 5% limit, 0.5% safety buffer
+        "max_total_dd_pct": 9.0,     # 10% limit, 1% safety buffer
+        "risk_percent": 1.0,
+        "use_dd_cushion": True,
+        "dd_cushion_start": 50.0,
+    },
+    "the5ers": {
+        "max_daily_loss_pct": 0.0,   # The5ers has no separate daily limit
+        "max_total_dd_pct": 5.0,     # 6% limit, 1% safety buffer
+        "risk_percent": 0.75,
+        "use_dd_cushion": True,
+        "dd_cushion_start": 40.0,
+        "close_on_daily_stop": False,
+    },
+    "funded_trader": {
+        "max_daily_loss_pct": 4.5,   # 5% limit, 0.5% safety buffer
+        "max_total_dd_pct": 9.0,     # 10% limit, 1% safety buffer
+        "risk_percent": 1.0,
+        "use_dd_cushion": True,
+        "dd_cushion_start": 50.0,
+    },
+    "tradelocker_generic": {
+        "max_daily_loss_pct": 4.5,
+        "max_total_dd_pct": 9.0,
+        "risk_percent": 1.0,
+        "use_dd_cushion": True,
+        "dd_cushion_start": 50.0,
+    },
+}
+
+
+def apply_prop_firm_profile(risk_cfg: RiskConfig, profile_name: str) -> RiskConfig:
+    """Apply a named prop-firm profile to a RiskConfig."""
+    key = profile_name.lower().replace(" ", "_").replace("-", "_")
+    if key not in PROP_FIRM_PROFILES:
+        raise ValueError(f"Unknown prop-firm profile: {profile_name!r}. "
+                         f"Available: {list(PROP_FIRM_PROFILES.keys())}")
+    overrides = PROP_FIRM_PROFILES[key]
+    for attr, value in overrides.items():
+        if hasattr(risk_cfg, attr):
+            setattr(risk_cfg, attr, value)
+    return risk_cfg

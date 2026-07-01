@@ -253,6 +253,7 @@ class TradeLockerBot:
             balance=self.get_balance(),
             sl_distance_price=sl_dist,
             money_per_price_per_qty=self.cfg.contract_size,
+            signal_strength=sig.strength,
         )
         if qty <= 0:
             logger.warning("Computed quantity 0 - skipping entry")

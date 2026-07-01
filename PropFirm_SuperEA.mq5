@@ -5,10 +5,10 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, MT5-PropFirm-SuperEA"
 #property link      "https://github.com/hakizajr3-glitch/MT5-PropFirm-SuperEA"
-#property version   "3.00"
-#property description "Trend-following EA (EMA + ATR) with prop-firm risk controls:"
-#property description "risk-% sizing, daily-loss limit, max drawdown, session filter,"
-#property description "spread filter, break-even and trailing stop."
+#property version   "4.00"
+#property description "Trend-following EA (EMA + ATR) with prop-firm risk controls."
+#property description "v4.0: ADX trend filter, MACD momentum, EMA200 alignment,"
+#property description "volatility regime filter, adaptive sizing, DD cushion."
 
 #include <Trade/Trade.mqh>
 #include <Trade/SymbolInfo.mqh>
@@ -25,12 +25,32 @@ input int      InpRSIPeriod        = 14;      // RSI period
 input double   InpRSIBuyMin        = 50.0;    // Buy only if RSI >= this
 input double   InpRSISellMax       = 50.0;    // Sell only if RSI <= this
 
+input group "=== Enhanced Filters (v4.0) ==="
+input bool     InpUseADXFilter     = false;   // Use ADX trend-strength filter
+input int      InpADXPeriod        = 14;      // ADX period
+input double   InpADXMin           = 20.0;    // Min ADX to allow trades (20-25 typical)
+input bool     InpUseMACDFilter    = false;   // Use MACD histogram confirmation
+input int      InpMACDFast         = 12;      // MACD fast EMA
+input int      InpMACDSlow         = 26;      // MACD slow EMA
+input int      InpMACDSignal       = 9;       // MACD signal period
+input bool     InpUseEMA200Filter  = false;   // Use EMA200 trend alignment
+input int      InpEMA200Period     = 200;     // EMA200 period
+input bool     InpUseVolFilter     = false;   // Use volatility regime filter
+input int      InpVolLookback      = 50;      // ATR average lookback for vol ratio
+input double   InpVolMin           = 0.5;     // Min ATR ratio (reject quiet markets)
+input double   InpVolMax           = 2.5;     // Max ATR ratio (reject wild markets)
+
 input group "=== Money / Risk Management ==="
 input bool     InpUseRiskPercent   = true;    // Size lots by risk % (else fixed lot)
 input double   InpRiskPercent      = 1.0;     // Risk per trade (% of balance)
 input double   InpFixedLot         = 0.10;    // Fixed lot (if risk % disabled)
 input int      InpMaxOpenPositions = 1;       // Max simultaneous positions (this EA)
 input int      InpMaxSpreadPoints  = 50;      // Max allowed spread (points, 0=off)
+input bool     InpUseAdaptiveSizing= false;   // Scale lot size by signal strength
+input double   InpAdaptiveMinPct   = 0.5;     // Min risk % (weak signals)
+input double   InpAdaptiveMaxPct   = 2.0;     // Max risk % (full-confirmation signals)
+input bool     InpUseDDCushion     = false;   // Reduce risk near drawdown limits
+input double   InpDDCushionStart   = 50.0;    // Start reducing at this % of DD budget used
 
 input group "=== Prop-Firm Guardrails ==="
 input double   InpMaxDailyLossPct  = 5.0;     // Max daily loss (% of day-start equity)
@@ -65,6 +85,11 @@ int      hFastEMA = INVALID_HANDLE;
 int      hSlowEMA = INVALID_HANDLE;
 int      hATR     = INVALID_HANDLE;
 int      hRSI     = INVALID_HANDLE;
+// v4.0 enhanced indicator handles
+int      hADX     = INVALID_HANDLE;
+int      hMACD    = INVALID_HANDLE;
+int      hEMA200  = INVALID_HANDLE;
+int      hATRSlow = INVALID_HANDLE;  // for volatility ratio
 
 datetime g_lastBarTime   = 0;
 int      g_currentDay    = -1;
@@ -72,6 +97,7 @@ double   g_dayStartEquity= 0.0;
 double   g_peakEquity    = 0.0;
 bool     g_dailyLocked   = false;   // daily loss limit reached today
 bool     g_totalLocked   = false;   // total drawdown limit reached
+int      g_lastSignalStrength = 100; // v4.0: signal strength for adaptive sizing
 
 string   g_gvDay   = "";            // global-var names (persist across restarts)
 string   g_gvDayEq = "";
@@ -110,8 +136,46 @@ int OnInit()
    if(hFastEMA == INVALID_HANDLE || hSlowEMA == INVALID_HANDLE ||
       hATR == INVALID_HANDLE || hRSI == INVALID_HANDLE)
    {
-      Print("Init error: failed to create indicator handles");
+      Print("Init error: failed to create core indicator handles");
       return INIT_FAILED;
+   }
+
+   // v4.0: create enhanced indicator handles
+   if(InpUseADXFilter)
+   {
+      hADX = iADX(_Symbol, _Period, InpADXPeriod);
+      if(hADX == INVALID_HANDLE)
+      {
+         Print("Init error: failed to create ADX handle");
+         return INIT_FAILED;
+      }
+   }
+   if(InpUseMACDFilter)
+   {
+      hMACD = iMACD(_Symbol, _Period, InpMACDFast, InpMACDSlow, InpMACDSignal, PRICE_CLOSE);
+      if(hMACD == INVALID_HANDLE)
+      {
+         Print("Init error: failed to create MACD handle");
+         return INIT_FAILED;
+      }
+   }
+   if(InpUseEMA200Filter)
+   {
+      hEMA200 = iMA(_Symbol, _Period, InpEMA200Period, 0, MODE_EMA, PRICE_CLOSE);
+      if(hEMA200 == INVALID_HANDLE)
+      {
+         Print("Init error: failed to create EMA200 handle");
+         return INIT_FAILED;
+      }
+   }
+   if(InpUseVolFilter)
+   {
+      if(InpVolLookback <= 0)
+      {
+         Print("Init error: VolLookback must be > 0");
+         return INIT_PARAMETERS_INCORRECT;
+      }
+      // hATRSlow not needed; vol ratio uses average of hATR buffer
    }
 
    trade.SetExpertMagicNumber(InpMagicNumber);
@@ -130,7 +194,7 @@ int OnInit()
 
    ResetDailyBaselineIfNeeded(true);
 
-   Print("PropFirm_SuperEA v3.00 initialized on ", _Symbol, " ", EnumToString(_Period));
+   Print("PropFirm_SuperEA v4.00 initialized on ", _Symbol, " ", EnumToString(_Period));
    return INIT_SUCCEEDED;
 }
 
@@ -143,6 +207,10 @@ void OnDeinit(const int reason)
    if(hSlowEMA != INVALID_HANDLE) IndicatorRelease(hSlowEMA);
    if(hATR     != INVALID_HANDLE) IndicatorRelease(hATR);
    if(hRSI     != INVALID_HANDLE) IndicatorRelease(hRSI);
+   if(hADX     != INVALID_HANDLE) IndicatorRelease(hADX);
+   if(hMACD    != INVALID_HANDLE) IndicatorRelease(hMACD);
+   if(hEMA200  != INVALID_HANDLE) IndicatorRelease(hEMA200);
+   if(hATRSlow != INVALID_HANDLE) IndicatorRelease(hATRSlow);
    Print("PropFirm_SuperEA deinitialized (reason ", reason, ")");
 }
 
@@ -228,7 +296,7 @@ bool SpreadOK()
 }
 
 //+------------------------------------------------------------------+
-//| Strategy signal: EMA cross + optional RSI filter                 |
+//| Strategy signal: EMA cross + RSI + enhanced v4.0 filters         |
 //| Uses closed bars (shift 1 vs 2) to avoid repainting              |
 //+------------------------------------------------------------------+
 int GetSignal()
@@ -251,9 +319,84 @@ int GetSignal()
       if(crossDown && rsi[1] > InpRSISellMax) crossDown = false;
    }
 
-   if(crossUp)   return  1;
-   if(crossDown) return -1;
-   return 0;
+   int signal = 0;
+   if(crossUp)   signal =  1;
+   if(crossDown) signal = -1;
+   if(signal == 0) return 0;
+
+   //-- v4.0 Enhanced filters --
+   int confirmations = 0;
+   int totalChecks   = 0;
+
+   // 1) ADX trend-strength gate
+   if(InpUseADXFilter && hADX != INVALID_HANDLE)
+   {
+      totalChecks++;
+      double adxVal[1];
+      if(CopyBuffer(hADX, 0, 1, 1, adxVal) < 1) return 0;  // fail closed
+      if(adxVal[0] >= InpADXMin)
+         confirmations++;
+      else
+         return 0;  // hard filter: no trend = no trade
+   }
+
+   // 2) MACD histogram momentum confirmation
+   if(InpUseMACDFilter && hMACD != INVALID_HANDLE)
+   {
+      totalChecks++;
+      double macdHist[1];
+      // buffer 2 is the histogram in iMACD
+      if(CopyBuffer(hMACD, 2, 1, 1, macdHist) < 1) return 0;  // fail closed
+      if((signal > 0 && macdHist[0] > 0) || (signal < 0 && macdHist[0] < 0))
+         confirmations++;
+      else
+         return 0;  // histogram must agree with direction
+   }
+
+   // 3) EMA200 trend alignment
+   if(InpUseEMA200Filter && hEMA200 != INVALID_HANDLE)
+   {
+      totalChecks++;
+      double ema200[1];
+      if(CopyBuffer(hEMA200, 0, 1, 1, ema200) < 1) return 0;  // fail closed
+      double lastClose = iClose(_Symbol, _Period, 1);
+      if((signal > 0 && lastClose > ema200[0]) || (signal < 0 && lastClose < ema200[0]))
+         confirmations++;
+      else
+         return 0;  // price must be on correct side of EMA200
+   }
+
+   // 4) Volatility regime filter (current ATR / avg ATR over lookback)
+   if(InpUseVolFilter)
+   {
+      totalChecks++;
+      double atrWindow[];
+      ArrayResize(atrWindow, InpVolLookback);
+      ArraySetAsSeries(atrWindow, true);
+      if(CopyBuffer(hATR, 0, 1, InpVolLookback, atrWindow) < InpVolLookback)
+         return 0;  // fail closed: not enough history
+
+      double atrAvg = 0.0;
+      for(int j = 0; j < InpVolLookback; j++)
+         atrAvg += atrWindow[j];
+      atrAvg /= InpVolLookback;
+      if(atrAvg <= 0.0)
+         return 0;
+
+      double volRatio = atrWindow[0] / atrAvg;
+      if(volRatio >= InpVolMin && volRatio <= InpVolMax)
+         confirmations++;
+      else
+         return 0;  // volatility outside normal range
+   }
+
+   // Compute signal strength (0-100)
+   if(totalChecks > 0)
+      g_lastSignalStrength = MathMin(100, 40 + (int)(60.0 * confirmations / totalChecks));
+   else
+      g_lastSignalStrength = 100;
+
+   return signal;
 }
 
 //+------------------------------------------------------------------+
@@ -306,11 +449,11 @@ void OpenTrade(int signal)
             " (", trade.ResultRetcodeDescription(), ")");
    else
       Print(signal > 0 ? "BUY" : "SELL", " opened ", lots, " lots @ ", price,
-            " SL=", sl, " TP=", tp);
+            " SL=", sl, " TP=", tp, " strength=", g_lastSignalStrength);
 }
 
 //+------------------------------------------------------------------+
-//| Risk-based position sizing                                        |
+//| Risk-based position sizing with adaptive scaling (v4.0)          |
 //+------------------------------------------------------------------+
 double CalcLotSize(double slDistancePrice)
 {
@@ -322,7 +465,8 @@ double CalcLotSize(double slDistancePrice)
       return NormalizeVolume(InpFixedLot, minLot, maxLot, lotStep);
 
    double balance   = AccountInfoDouble(ACCOUNT_BALANCE);
-   double riskMoney = balance * InpRiskPercent / 100.0;
+   double riskPct   = EffectiveRiskPercent();
+   double riskMoney = balance * riskPct / 100.0;
 
    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
    double tickSize  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
@@ -335,6 +479,37 @@ double CalcLotSize(double slDistancePrice)
 
    double lots = riskMoney / lossPerLot;
    return NormalizeVolume(lots, minLot, maxLot, lotStep);
+}
+
+//+------------------------------------------------------------------+
+//| v4.0: Effective risk % after adaptive sizing + DD cushion         |
+//+------------------------------------------------------------------+
+double EffectiveRiskPercent()
+{
+   double pct = InpRiskPercent;
+
+   // Adaptive sizing: scale between min and max based on signal strength
+   if(InpUseAdaptiveSizing)
+   {
+      double ratio = g_lastSignalStrength / 100.0;
+      pct = InpAdaptiveMinPct + (InpAdaptiveMaxPct - InpAdaptiveMinPct) * ratio;
+   }
+
+   // DD cushion: reduce risk when approaching drawdown limits
+   if(InpUseDDCushion && g_peakEquity > 0 && InpMaxTotalDDPct > 0)
+   {
+      double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+      double ddPct = (g_peakEquity - equity) / g_peakEquity * 100.0;
+      double ddUsage = ddPct / InpMaxTotalDDPct * 100.0;
+      if(ddUsage >= InpDDCushionStart)
+      {
+         double scale = MathMax(0.25, 1.0 - 0.75 * (ddUsage - InpDDCushionStart)
+                                            / (100.0 - InpDDCushionStart));
+         pct *= scale;
+      }
+   }
+
+   return MathMax(0.01, pct);
 }
 
 double NormalizeVolume(double lots, double minLot, double maxLot, double lotStep)

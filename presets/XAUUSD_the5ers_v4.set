@@ -1,0 +1,57 @@
+; PropFirm SuperEA v4.0 - XAUUSD for The5ers (MT5)
+; Conservative preset for The5ers' tight drawdown limits (6% total, no daily).
+InpFastEMA=20
+InpSlowEMA=100
+InpATRPeriod=14
+InpSL_ATR=2.0
+InpTP_ATR=4.0
+InpUseRSIFilter=true
+InpRSIPeriod=14
+InpRSIBuyMin=50.0
+InpRSISellMax=50.0
+; Enhanced Filters (v4.0) - tighter ADX for selectivity
+InpUseADXFilter=true
+InpADXPeriod=14
+InpADXMin=25.0
+InpUseMACDFilter=true
+InpMACDFast=12
+InpMACDSlow=26
+InpMACDSignal=9
+InpUseEMA200Filter=true
+InpEMA200Period=200
+InpUseVolFilter=true
+InpVolLookback=50
+InpVolMin=0.5
+InpVolMax=2.5
+; Risk - conservative for The5ers
+InpUseRiskPercent=true
+InpRiskPercent=0.75
+InpFixedLot=0.10
+InpMaxOpenPositions=1
+InpMaxSpreadPoints=50
+InpUseAdaptiveSizing=true
+InpAdaptiveMinPct=0.3
+InpAdaptiveMaxPct=1.0
+InpUseDDCushion=true
+InpDDCushionStart=40.0
+; Prop-Firm Guardrails (The5ers: no daily, 6% total with 1% buffer)
+InpMaxDailyLossPct=0.0
+InpMaxTotalDDPct=5.0
+InpCloseOnDailyStop=false
+InpCloseOnTotalStop=true
+; Session
+InpUseSession=true
+InpStartHour=7
+InpEndHour=20
+InpTradeMonday=true
+InpTradeFriday=false
+; Exit Management
+InpUseBreakEven=true
+InpBE_TriggerPoints=150
+InpBE_LockPoints=20
+InpUseTrailing=true
+InpTrailStartPoints=200
+InpTrailStepPoints=100
+; General
+InpMagicNumber=260621
+InpTradeComment=PropFirm_SuperEA_v4_5ers
