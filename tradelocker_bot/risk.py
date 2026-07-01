@@ -130,7 +130,7 @@ class RiskManager:
         base_pct = cfg.risk_percent
 
         # Adaptive sizing: scale between min and max based on signal strength
-        if getattr(cfg, "use_adaptive_sizing", False) and signal_strength < 100:
+        if getattr(cfg, "use_adaptive_sizing", False):
             min_pct = getattr(cfg, "adaptive_min_pct", 0.5)
             max_pct = getattr(cfg, "adaptive_max_pct", 2.0)
             ratio = signal_strength / 100.0
@@ -138,10 +138,10 @@ class RiskManager:
 
         # DD cushion: reduce risk as drawdown grows
         if getattr(cfg, "use_dd_cushion", False) and self.state.peak_equity > 0:
-            equity = self.state.peak_equity  # conservative: use last known
+            current_equity = self.state.day_start_equity  # best available
             dd_pct = 0.0
-            if self.state.peak_equity > 0:
-                dd_pct = max(0.0, (self.state.peak_equity - self.state.day_start_equity)
+            if self.state.peak_equity > 0 and current_equity > 0:
+                dd_pct = max(0.0, (self.state.peak_equity - current_equity)
                              / self.state.peak_equity * 100.0)
             max_dd = cfg.max_total_dd_pct if cfg.max_total_dd_pct > 0 else 10.0
             dd_usage = dd_pct / max_dd * 100.0  # how much of the DD budget is used

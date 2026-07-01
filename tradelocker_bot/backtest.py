@@ -177,6 +177,8 @@ def run_backtest(df: pd.DataFrame, scfg: StrategyConfig,
     warmup = max(scfg.slow_ema, scfg.atr_period, scfg.rsi_period) + 2
     if use_ema200:
         warmup = max(warmup, getattr(scfg, "ema200_period", 200) + 2)
+    if use_vol:
+        warmup = max(warmup, getattr(scfg, "vol_lookback", 50) + scfg.atr_period)
     equity = params.start_equity
     eq_points = [equity]
     trades: list[Trade] = []
@@ -235,7 +237,9 @@ def run_backtest(df: pd.DataFrame, scfg: StrategyConfig,
 
         if use_vol and vol_ratio_arr is not None:
             total_checks += 1
-            vr = vol_ratio_arr[i] if not np.isnan(vol_ratio_arr[i]) else 1.0
+            if np.isnan(vol_ratio_arr[i]):
+                return strat.NONE, 0
+            vr = vol_ratio_arr[i]
             vol_min = getattr(scfg, "vol_min", 0.5)
             vol_max = getattr(scfg, "vol_max", 2.5)
             if vol_min <= vr <= vol_max:
@@ -306,7 +310,15 @@ def run_backtest(df: pd.DataFrame, scfg: StrategyConfig,
                 sl, tp = strat.stop_levels(sig, entry, a, scfg.sl_atr, scfg.tp_atr)
                 sl_dist = abs(entry - sl)
                 if sl_dist > 0:
-                    risk_at_entry = equity * params.risk_percent / 100.0
+                    effective_risk_pct = params.risk_percent
+                    if enhanced and getattr(scfg, "use_adx_filter", False):
+                        ratio = max(0.0, min(1.0, strength / 100.0))
+                        min_pct = getattr(scfg, "adaptive_min_pct",
+                                          params.risk_percent * 0.5)
+                        max_pct = getattr(scfg, "adaptive_max_pct",
+                                          params.risk_percent * 2.0)
+                        effective_risk_pct = min_pct + (max_pct - min_pct) * ratio
+                    risk_at_entry = equity * effective_risk_pct / 100.0
                     qty = risk_at_entry / sl_dist
                     side = sig
                     entry_idx = i + 1

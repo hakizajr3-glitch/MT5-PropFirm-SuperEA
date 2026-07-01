@@ -218,7 +218,9 @@ def compute_signal(df: pd.DataFrame, cfg) -> SignalResult:
         if use_ema200 and signal != NONE:
             total_checks += 1
             ema200_period = getattr(cfg, "ema200_period", 200)
-            if len(df) >= ema200_period + 2:
+            if len(df) < ema200_period + 2:
+                signal = NONE  # insufficient bars for EMA200
+            else:
                 ema200_s = ema(df["close"], ema200_period)
                 ema200_val = float(ema200_s.iloc[-1])
                 if (signal == BUY and last_close > ema200_val) or \
@@ -233,10 +235,14 @@ def compute_signal(df: pd.DataFrame, cfg) -> SignalResult:
             vol_lookback = getattr(cfg, "vol_lookback", 50)
             vol_min = getattr(cfg, "vol_min", 0.5)
             vol_max = getattr(cfg, "vol_max", 2.5)
-            if len(df) >= vol_lookback + cfg.atr_period:
+            if len(df) < vol_lookback + cfg.atr_period:
+                signal = NONE  # insufficient bars for volatility ratio
+            else:
                 vol_r = volatility_ratio(df, cfg.atr_period, vol_lookback)
-                vol_val = float(vol_r.iloc[-1]) if not np.isnan(vol_r.iloc[-1]) else 1.0
-                if vol_min <= vol_val <= vol_max:
+                vol_val = float(vol_r.iloc[-1])
+                if np.isnan(vol_val):
+                    signal = NONE  # NaN volatility = reject
+                elif vol_min <= vol_val <= vol_max:
                     confirmations += 1
                 else:
                     signal = NONE  # volatility too extreme

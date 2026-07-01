@@ -232,6 +232,7 @@ PROP_FIRM_PROFILES: dict[str, dict] = {
         "risk_percent": 0.75,
         "use_dd_cushion": True,
         "dd_cushion_start": 40.0,
+        "close_on_daily_stop": False,
     },
     "funded_trader": {
         "max_daily_loss_pct": 4.5,   # 5% limit, 0.5% safety buffer
@@ -259,5 +260,5 @@ def apply_prop_firm_profile(risk_cfg: RiskConfig, profile_name: str) -> RiskConf
     overrides = PROP_FIRM_PROFILES[key]
     for attr, value in overrides.items():
         if hasattr(risk_cfg, attr):
-            object.__setattr__(risk_cfg, attr, value)
+            setattr(risk_cfg, attr, value)
     return risk_cfg

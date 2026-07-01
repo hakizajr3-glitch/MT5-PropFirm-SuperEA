@@ -170,12 +170,12 @@ int OnInit()
    }
    if(InpUseVolFilter)
    {
-      hATRSlow = iATR(_Symbol, _Period, InpVolLookback);
-      if(hATRSlow == INVALID_HANDLE)
+      if(InpVolLookback <= 0)
       {
-         Print("Init error: failed to create ATR-slow handle for vol filter");
-         return INIT_FAILED;
+         Print("Init error: VolLookback must be > 0");
+         return INIT_PARAMETERS_INCORRECT;
       }
+      // hATRSlow not needed; vol ratio uses average of hATR buffer
    }
 
    trade.SetExpertMagicNumber(InpMagicNumber);
@@ -333,13 +333,11 @@ int GetSignal()
    {
       totalChecks++;
       double adxVal[1];
-      if(CopyBuffer(hADX, 0, 1, 1, adxVal) >= 1)
-      {
-         if(adxVal[0] >= InpADXMin)
-            confirmations++;
-         else
-            return 0;  // hard filter: no trend = no trade
-      }
+      if(CopyBuffer(hADX, 0, 1, 1, adxVal) < 1) return 0;  // fail closed
+      if(adxVal[0] >= InpADXMin)
+         confirmations++;
+      else
+         return 0;  // hard filter: no trend = no trade
    }
 
    // 2) MACD histogram momentum confirmation
@@ -348,13 +346,11 @@ int GetSignal()
       totalChecks++;
       double macdHist[1];
       // buffer 2 is the histogram in iMACD
-      if(CopyBuffer(hMACD, 2, 1, 1, macdHist) >= 1)
-      {
-         if((signal > 0 && macdHist[0] > 0) || (signal < 0 && macdHist[0] < 0))
-            confirmations++;
-         else
-            return 0;  // histogram must agree with direction
-      }
+      if(CopyBuffer(hMACD, 2, 1, 1, macdHist) < 1) return 0;  // fail closed
+      if((signal > 0 && macdHist[0] > 0) || (signal < 0 && macdHist[0] < 0))
+         confirmations++;
+      else
+         return 0;  // histogram must agree with direction
    }
 
    // 3) EMA200 trend alignment
@@ -362,30 +358,36 @@ int GetSignal()
    {
       totalChecks++;
       double ema200[1];
-      if(CopyBuffer(hEMA200, 0, 1, 1, ema200) >= 1)
-      {
-         double lastClose = iClose(_Symbol, _Period, 1);
-         if((signal > 0 && lastClose > ema200[0]) || (signal < 0 && lastClose < ema200[0]))
-            confirmations++;
-         else
-            return 0;  // price must be on correct side of EMA200
-      }
+      if(CopyBuffer(hEMA200, 0, 1, 1, ema200) < 1) return 0;  // fail closed
+      double lastClose = iClose(_Symbol, _Period, 1);
+      if((signal > 0 && lastClose > ema200[0]) || (signal < 0 && lastClose < ema200[0]))
+         confirmations++;
+      else
+         return 0;  // price must be on correct side of EMA200
    }
 
-   // 4) Volatility regime filter (ATR ratio)
-   if(InpUseVolFilter && hATRSlow != INVALID_HANDLE)
+   // 4) Volatility regime filter (current ATR / avg ATR over lookback)
+   if(InpUseVolFilter)
    {
       totalChecks++;
-      double atrFast[1], atrSlow[1];
-      if(CopyBuffer(hATR, 0, 1, 1, atrFast) >= 1 &&
-         CopyBuffer(hATRSlow, 0, 1, 1, atrSlow) >= 1 && atrSlow[0] > 0)
-      {
-         double volRatio = atrFast[0] / atrSlow[0];
-         if(volRatio >= InpVolMin && volRatio <= InpVolMax)
-            confirmations++;
-         else
-            return 0;  // volatility outside normal range
-      }
+      double atrWindow[];
+      ArrayResize(atrWindow, InpVolLookback);
+      ArraySetAsSeries(atrWindow, true);
+      if(CopyBuffer(hATR, 0, 1, InpVolLookback, atrWindow) < InpVolLookback)
+         return 0;  // fail closed: not enough history
+
+      double atrAvg = 0.0;
+      for(int j = 0; j < InpVolLookback; j++)
+         atrAvg += atrWindow[j];
+      atrAvg /= InpVolLookback;
+      if(atrAvg <= 0.0)
+         return 0;
+
+      double volRatio = atrWindow[0] / atrAvg;
+      if(volRatio >= InpVolMin && volRatio <= InpVolMax)
+         confirmations++;
+      else
+         return 0;  // volatility outside normal range
    }
 
    // Compute signal strength (0-100)
@@ -487,7 +489,7 @@ double EffectiveRiskPercent()
    double pct = InpRiskPercent;
 
    // Adaptive sizing: scale between min and max based on signal strength
-   if(InpUseAdaptiveSizing && g_lastSignalStrength < 100)
+   if(InpUseAdaptiveSizing)
    {
       double ratio = g_lastSignalStrength / 100.0;
       pct = InpAdaptiveMinPct + (InpAdaptiveMaxPct - InpAdaptiveMinPct) * ratio;
